@@ -3,9 +3,8 @@ using System.Diagnostics;
 namespace SimaiAutomator.Core.Services;
 
 /// <summary>
-/// Launches ACE for audio replacement with guided instructions.
-/// Full GUI automation is unreliable across ACE versions;
-/// semi-automated with console guidance is 100% reliable.
+/// Launches ACE for audio replacement. Waits for the user to close ACE,
+/// then continues automatically. No keyboard input needed.
 /// </summary>
 public static class AceAutomator
 {
@@ -32,30 +31,23 @@ public static class AceAutomator
         using var proc = Process.Start(psi);
         if (proc == null) return false;
 
-        // Print clear instructions
+        // Print instructions
         Console.WriteLine();
         Console.WriteLine("========================================");
-        Console.WriteLine("  ACE 音频替换 - 请按以下步骤操作");
+        Console.WriteLine("  ACE 音频替换");
         Console.WriteLine("========================================");
-        Console.WriteLine();
-        Console.WriteLine($"  1. 在左侧树中选中音频 cue (Cue Sheet)");
-        Console.WriteLine($"  2. 菜单 Action -> Replace (或右键 Replace)");
-        Console.WriteLine($"  3. 选择文件: {audioPath}");
-        Console.WriteLine($"  4. 勾选 Path 选项，其余保持不变");
+        Console.WriteLine($"  1. 左侧选中 Cue Sheet 下的音频 cue");
+        Console.WriteLine($"  2. 右键 -> Replace (或菜单 Action -> Replace)");
+        Console.WriteLine($"  3. 选择: {Path.GetFileName(audioPath)}");
+        Console.WriteLine($"  4. 勾选 Path，其余不变，点 OK");
         Console.WriteLine($"  5. 菜单 File -> Save As");
         Console.WriteLine($"  6. 保存为: {Path.GetFileName(outputAcbPath)}");
-        Console.WriteLine($"     位置: {Path.GetDirectoryName(outputAcbPath)}");
-        Console.WriteLine($"  7. 关闭 ACE 窗口");
-        Console.WriteLine();
+        Console.WriteLine($"     到: {Path.GetDirectoryName(outputAcbPath)}");
+        Console.WriteLine($"  7. 关闭 ACE 窗口继续...");
         Console.WriteLine("========================================");
-        Console.Write("  完成后按 Enter 继续...");
-        Console.ReadLine();
 
-        // Cleanup
-        if (!proc.HasExited)
-        {
-            try { proc.Kill(); } catch { }
-        }
+        // Wait for ACE to close — user closes it when done
+        await proc.WaitForExitAsync();
 
         return File.Exists(outputAcbPath);
     }
