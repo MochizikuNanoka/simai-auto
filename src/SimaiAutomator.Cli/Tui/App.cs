@@ -132,9 +132,14 @@ public static class App
         grid.AddRow("[bold]作者[/]", E(project.Artist));
         grid.AddRow("[bold]BPM[/]", E(project.Bpm.ToString()));
 
-        var validCharts = project.Charts.Where(c => c.Value.IsValid).ToList();
-        var chartStr = validCharts.Count > 0
-            ? string.Join(", ", validCharts.Select(c => $"{c.Key.Label()}({c.Value.LevelDisplay})"))
+        var validNums = project.ValidSimaiNumbers;
+        var chartStr = validNums.Count > 0
+            ? string.Join(", ", validNums.Select(n =>
+            {
+                var e2 = project.Charts[n];
+                var slot = validNums.IndexOf(n);
+                return $"{((ChartDifficulty)slot).Label()} Lv.{e2.LevelDisplay}";
+            }))
             : "无";
         grid.AddRow("[bold]谱面[/]", E(chartStr));
 

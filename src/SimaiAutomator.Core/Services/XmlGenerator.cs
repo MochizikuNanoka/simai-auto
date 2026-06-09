@@ -43,28 +43,6 @@ public static class XmlGenerator
         return sw.ToString();
     }
 
-    public static string GenerateVersionXml(int verId, string verName)
-    {
-        var doc = new XDocument(new XDeclaration("1.0", "utf-8", null));
-        doc.Add(new XElement("MusicVersionData",
-            new XAttribute(XNamespace.Xmlns + "xsi", "http://www.w3.org/2001/XMLSchema-instance"),
-            new XAttribute(XNamespace.Xmlns + "xsd", "http://www.w3.org/2001/XMLSchema"),
-            new XElement("dataName", $"MusicVersion{verId:D6}"),
-            new XElement("name", new XElement("id", verId), new XElement("str", verName)),
-            new XElement("genreName", verName),
-            new XElement("genreNameTwoLine", verName),
-            new XElement("version", 50000),
-            new XElement("Color", new XElement("R", 110), new XElement("G", 217), new XElement("B", 67)),
-            new XElement("FileName", $"UI_CMN_TabTitle_MaimaiTitle_{verName}"),
-            new XElement("priority", 0),
-            new XElement("disable", "false")
-        ));
-
-        using var sw = new Utf8StringWriter();
-        doc.Save(sw, SaveOptions.None);
-        return sw.ToString();
-    }
-
     public static MusicXmlData Build(SimaiProject p, int id6)
     {
         var d = new MusicXmlData
@@ -80,19 +58,34 @@ public static class XmlGenerator
             MovieStr = p.Title
         };
 
-        for (int i = 0; i < 6; i++)
+        var validNums = p.ValidSimaiNumbers;
+
+        for (int slot = 0; slot < 6; slot++)
         {
-            var diff = (ChartDifficulty)i;
-            var has = p.Charts.TryGetValue(diff, out var entry) && entry.IsValid;
-            d.NotesData[i] = new NoteEntry
+            bool hasChart = slot < validNums.Count;
+            if (hasChart)
             {
-                FilePath = $"{id6:D6}_{i:D2}.ma2",
-                Level = has ? entry!.LevelNumber : 0,
-                LevelDecimal = has ? entry!.LevelDecimal : 0,
-                NotesDesignerStr = has ? entry!.Charter : "",
-                MusicLevelId = has ? ChartDifficultyEx.ToMusicLevelId(entry!.LevelNumber) : 0,
-                IsEnable = has
-            };
+                var simaiNum = validNums[slot];
+                var entry = p.Charts[simaiNum];
+                MaidataParser.ParseLevel(entry.LevelDisplay, out var lv, out var dec);
+                d.NotesData[slot] = new NoteEntry
+                {
+                    FilePath = $"{id6:D6}_{slot:D2}.ma2",
+                    Level = lv,
+                    LevelDecimal = dec,
+                    NotesDesignerStr = entry.Charter,
+                    MusicLevelId = ChartDifficultyEx.ToMusicLevelId(lv),
+                    IsEnable = true
+                };
+            }
+            else
+            {
+                d.NotesData[slot] = new NoteEntry
+                {
+                    FilePath = $"{id6:D6}_{slot:D2}.ma2",
+                    IsEnable = false
+                };
+            }
         }
 
         return d;

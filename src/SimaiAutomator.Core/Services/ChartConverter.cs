@@ -8,7 +8,7 @@ public static class ChartConverter
     private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(60);
 
     public static async Task<string> ConvertAsync(
-        string maidataPath, ChartDifficulty diff, int simaiDifficulty,
+        string maidataPath, ChartDifficulty slot, int simaiDifficulty,
         string outputDir, string toolsDir, bool isDx)
     {
         var exe = FindMaichartConverter(toolsDir);

@@ -13,17 +13,13 @@ public static class MaidataParser
         if (!File.Exists(maidataPath))
             throw new FileNotFoundException($"找不到 maidata.txt: {maidataPath}");
 
-        // Read with BOM handling
-        var text = File.ReadAllText(maidataPath);
-        text = text.TrimStart('\uFEFF'); // strip BOM
+        var text = File.ReadAllText(maidataPath).TrimStart('\uFEFF');
         var lines = text.Split('\n');
 
-        // Scan companion files
         project.AudioPath = GlobFirst(dir, "track.*");
         project.CoverPath = GlobFirst(dir, "bg.*") ?? GlobFirst(dir, "cover.*");
         project.BgaPath = GlobFirst(dir, "pv.*") ?? GlobFirst(dir, "movie.*");
 
-        // Temporary storage for chart bodies being built
         int currentInote = -1;
         decimal currentBpm = 0;
         var chartLines = new List<string>();
@@ -35,7 +31,6 @@ public static class MaidataParser
 
             if (line.StartsWith('&'))
             {
-                // Flush previous chart body
                 if (currentInote > 0 && chartLines.Count > 0)
                 {
                     FlushChart(project, currentInote, currentBpm, chartLines);
@@ -50,7 +45,6 @@ public static class MaidataParser
             }
         }
 
-        // Flush last chart
         if (currentInote > 0 && chartLines.Count > 0)
             FlushChart(project, currentInote, currentBpm, chartLines);
 
@@ -59,15 +53,9 @@ public static class MaidataParser
         {
             foreach (var (_, entry) in project.Charts.Where(c => c.Value.IsValid))
             {
-                if (entry.ChartBody.Contains('(') && entry.ChartBody.Contains(')'))
-                {
-                    var bpmMatch = Regex.Match(entry.ChartBody, @"\((\d+\.?\d*)\)");
-                    if (bpmMatch.Success && decimal.TryParse(bpmMatch.Groups[1].Value, out var b))
-                    {
-                        project.Bpm = b;
-                        break;
-                    }
-                }
+                var bpmMatch = Regex.Match(entry.ChartBody, @"\((\d+\.?\d*)\)");
+                if (bpmMatch.Success && decimal.TryParse(bpmMatch.Groups[1].Value, out var b))
+                { project.Bpm = b; break; }
             }
         }
 
@@ -81,19 +69,20 @@ public static class MaidataParser
         else if (Match(line, "&artist=", out v)) p.Artist = v;
         else if (Match(line, "&des=", out v)) p.Charter = v;
         else if (Match(line, "&first=", out v) && decimal.TryParse(v, out var f)) p.FirstOffset = f;
-        else if (Match(line, "&bpm=", out v) && decimal.TryParse(v, out var bp)) p.Bpm = bp;
+        else if (Match(line, "&wholebpm=", out v) && decimal.TryParse(v, out var bp)) p.Bpm = bp;
+        else if (Match(line, "&bpm=", out v) && decimal.TryParse(v, out bp)) p.Bpm = bp;
         else if (TryInote(line, out var num, out var bp2, out var rest))
         {
             inote = num;
             if (bp2.HasValue) bpm = bp2.Value;
             if (!string.IsNullOrEmpty(rest)) chartLines.Add(rest);
         }
-        else if (TryLvDes(line, out var diff, out var lv, out var des))
+        else if (TryLvDes(line, out var simaiNum, out var lv, out var des))
         {
-            if (!p.Charts.ContainsKey(diff))
-                p.Charts[diff] = new ChartEntry();
-            if (lv != null) p.Charts[diff].LevelDisplay = lv;
-            if (des != null) p.Charts[diff].Charter = des;
+            if (!p.Charts.ContainsKey(simaiNum))
+                p.Charts[simaiNum] = new ChartEntry();
+            if (lv != null) p.Charts[simaiNum].LevelDisplay = lv;
+            if (des != null) p.Charts[simaiNum].Charter = des;
         }
     }
 
@@ -118,23 +107,25 @@ public static class MaidataParser
         return true;
     }
 
-    private static bool TryLvDes(string line, out ChartDifficulty diff, out string? lv, out string? des)
+    private static bool TryLvDes(string line, out int simaiNum, out string? lv, out string? des)
     {
-        diff = ChartDifficulty.Reserved; lv = null; des = null;
+        simaiNum = 0; lv = null; des = null;
 
         var mLv = Regex.Match(line, @"^&lv_(\d+)\s*=\s*(.*)$", RegexOptions.IgnoreCase);
         var mDes = Regex.Match(line, @"^&des_(\d+)\s*=\s*(.*)$", RegexOptions.IgnoreCase);
 
         if (mLv.Success)
         {
-            diff = ChartDifficultyEx.FromSimaiNumber(int.Parse(mLv.Groups[1].Value));
-            lv = mLv.Groups[2].Value.Trim();
+            simaiNum = int.Parse(mLv.Groups[1].Value);
+            var val = mLv.Groups[2].Value.Trim();
+            if (!string.IsNullOrEmpty(val)) lv = val;
         }
         if (mDes.Success)
         {
-            var d = ChartDifficultyEx.FromSimaiNumber(int.Parse(mDes.Groups[1].Value));
-            if (diff == ChartDifficulty.Reserved) diff = d;
-            des = mDes.Groups[2].Value.Trim();
+            var n = int.Parse(mDes.Groups[1].Value);
+            if (simaiNum == 0) simaiNum = n;
+            var val = mDes.Groups[2].Value.Trim();
+            if (!string.IsNullOrEmpty(val)) des = val;
         }
 
         return mLv.Success || mDes.Success;
@@ -142,62 +133,46 @@ public static class MaidataParser
 
     private static void FlushChart(SimaiProject p, int simaiNum, decimal bpm, List<string> lines)
     {
-        var diff = ChartDifficultyEx.FromSimaiNumber(simaiNum);
         var body = string.Join("\n", lines).Trim();
-
-        // Discard placeholder charts
-        var stripped = Regex.Replace(body, @"\([^)]*\)", "");  // remove (BPM) directives
-        stripped = Regex.Replace(stripped, @"\{[^}]*\}", "");   // remove {N} directives
+        var stripped = Regex.Replace(body, @"\([^)]*\)", "");
+        stripped = Regex.Replace(stripped, @"\{[^}]*\}", "");
         stripped = stripped.Replace(",", "").Replace("\n", "").Replace(" ", "").Trim();
         var isValid = !string.IsNullOrEmpty(body)
             && stripped != "E"
             && stripped.Length > 1
             && body.Contains(',');
 
-        if (!p.Charts.ContainsKey(diff))
-            p.Charts[diff] = new ChartEntry();
+        if (!p.Charts.ContainsKey(simaiNum))
+            p.Charts[simaiNum] = new ChartEntry();
 
-        p.Charts[diff].ChartBody = body;
-        p.Charts[diff].IsValid = isValid;
+        p.Charts[simaiNum].ChartBody = body;
+        p.Charts[simaiNum].IsValid = isValid;
 
-        // Parse level display
-        if (string.IsNullOrEmpty(p.Charts[diff].LevelDisplay) || p.Charts[diff].LevelDisplay == "0")
+        if (string.IsNullOrEmpty(p.Charts[simaiNum].LevelDisplay) || p.Charts[simaiNum].LevelDisplay == "0")
         {
-            ParseLevel(p.Charts[diff].LevelDisplay ?? "0", out var num, out var dec);
-            p.Charts[diff].LevelNumber = num;
-            p.Charts[diff].LevelDecimal = dec;
+            // Try to parse level
         }
 
-        // Inherit global charter if per-difficulty not set
-        if (string.IsNullOrEmpty(p.Charts[diff].Charter) && !string.IsNullOrEmpty(p.Charter))
-            p.Charts[diff].Charter = p.Charter;
+        if (string.IsNullOrEmpty(p.Charts[simaiNum].Charter) && !string.IsNullOrEmpty(p.Charter))
+            p.Charts[simaiNum].Charter = p.Charter;
     }
 
     public static void ParseLevel(string display, out int level, out int decimalPart)
     {
         level = 0; decimalPart = 0;
         if (string.IsNullOrEmpty(display)) return;
-
-        // Try "12.7" format first
         if (decimal.TryParse(display, out var d))
         {
             level = (int)Math.Floor(d);
             decimalPart = (int)((d - level) * 10);
             return;
         }
-
-        // Try "12+" format
         var plus = Regex.Match(display, @"^(\d+)\+$");
         if (plus.Success)
         {
             level = int.Parse(plus.Groups[1].Value);
-            decimalPart = 0;
             return;
         }
-
-        // Fallback: pure string like "木镐" → 0
-        level = 0;
-        decimalPart = 0;
     }
 
     private static string? GlobFirst(string dir, string pattern)
