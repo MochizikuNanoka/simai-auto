@@ -1,0 +1,28 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+
+## Build output
+publish/
+dist/
+output/
+
+## IDE
+.idea/
+*.sln.DotSettings
+
+## Plans (generated docs)
+.hermes/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## External tool files (downloaded by user)
+tools/*
+!tools/.gitkeep
+!tools/.gitattributes

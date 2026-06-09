@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SimaiAutomator.Cli/SimaiAutomator.Cli.csproj" />
+    <Project Path="src/SimaiAutomator.Core/SimaiAutomator.Core.csproj" />
+  </Folder>
+</Solution>
