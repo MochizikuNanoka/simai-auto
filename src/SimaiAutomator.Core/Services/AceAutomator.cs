@@ -36,9 +36,12 @@ public static class AceAutomator
         Console.WriteLine("========================================");
         Console.WriteLine("  ACE 音频替换");
         Console.WriteLine("========================================");
+        Console.WriteLine();
+        Console.WriteLine($"  音频文件: {audioPath}");
+        Console.WriteLine();
         Console.WriteLine($"  1. 左侧选中 Cue Sheet 下的音频 cue");
         Console.WriteLine($"  2. 右键 -> Replace (或菜单 Action -> Replace)");
-        Console.WriteLine($"  3. 选择: {Path.GetFileName(audioPath)}");
+        Console.WriteLine($"  3. 在文件选择器中导航到上述路径，选择音频");
         Console.WriteLine($"  4. 勾选 Path，其余不变，点 OK");
         Console.WriteLine($"  5. 菜单 File -> Save As");
         Console.WriteLine($"  6. 保存为: {Path.GetFileName(outputAcbPath)}");

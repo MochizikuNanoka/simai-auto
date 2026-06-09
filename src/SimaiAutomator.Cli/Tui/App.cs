@@ -11,23 +11,6 @@ public static class App
 {
     private const string DefaultOpt = "A500";
 
-    [DllImport("user32.dll")]
-    private static extern bool OpenClipboard(IntPtr hWnd);
-    [DllImport("user32.dll")]
-    private static extern bool EmptyClipboard();
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
-    [DllImport("user32.dll")]
-    private static extern bool CloseClipboard();
-    [DllImport("kernel32.dll")]
-    private static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
-    [DllImport("kernel32.dll")]
-    private static extern IntPtr GlobalLock(IntPtr hMem);
-    [DllImport("kernel32.dll")]
-    private static extern bool GlobalUnlock(IntPtr hMem);
-    private const uint CF_UNICODETEXT = 13;
-    private const uint GMEM_MOVEABLE = 2;
-
     public static async Task RunAsync()
     {
         AnsiConsole.Clear();
@@ -127,33 +110,9 @@ public static class App
         if (resultPath != null && Directory.Exists(resultPath))
         {
             AnsiConsole.MarkupLine($"[bold green]输出:[/] {E(resultPath)}");
-            CopyToClipboard(resultPath);
-            AnsiConsole.MarkupLine("[grey]路径已复制到剪贴板[/]");
         }
 
         PauseAndExit();
-    }
-
-    private static void CopyToClipboard(string text)
-    {
-        try
-        {
-            if (OpenClipboard(IntPtr.Zero))
-            {
-                EmptyClipboard();
-                var hMem = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)((text.Length + 1) * 2));
-                if (hMem != IntPtr.Zero)
-                {
-                    var ptr = GlobalLock(hMem);
-                    Marshal.Copy(text.ToCharArray(), 0, ptr, text.Length);
-                    Marshal.WriteInt16(ptr, text.Length * 2, 0);
-                    GlobalUnlock(hMem);
-                    SetClipboardData(CF_UNICODETEXT, hMem);
-                }
-                CloseClipboard();
-            }
-        }
-        catch { }
     }
 
     private static void PauseAndExit()
