@@ -10,11 +10,11 @@ public static class ChartDifficultyEx
     /// <summary>Simple label for display: just the difficulty abbreviation</summary>
     public static string Label(this ChartDifficulty d) => d switch
     {
-        ChartDifficulty.Basic => "BSC",
-        ChartDifficulty.Advanced => "ADV",
-        ChartDifficulty.Expert => "EXP",
-        ChartDifficulty.Master => "MST",
-        ChartDifficulty.ReMaster => "ReM",
+        ChartDifficulty.Basic => "Basic",
+        ChartDifficulty.Advanced => "Advanced",
+        ChartDifficulty.Expert => "Expert",
+        ChartDifficulty.Master => "Master",
+        ChartDifficulty.ReMaster => "Re:Master",
         _ => "-"
     };
 

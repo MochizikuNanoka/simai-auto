@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using Spectre.Console;
 using SimaiAutomator.Core.Services;
@@ -10,6 +11,23 @@ public static class App
 {
     private const string DefaultOpt = "A500";
 
+    [DllImport("user32.dll")]
+    private static extern bool OpenClipboard(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool EmptyClipboard();
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);
+    [DllImport("user32.dll")]
+    private static extern bool CloseClipboard();
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalAlloc(uint uFlags, UIntPtr dwBytes);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GlobalLock(IntPtr hMem);
+    [DllImport("kernel32.dll")]
+    private static extern bool GlobalUnlock(IntPtr hMem);
+    private const uint CF_UNICODETEXT = 13;
+    private const uint GMEM_MOVEABLE = 2;
+
     public static async Task RunAsync()
     {
         AnsiConsole.Clear();
@@ -17,13 +35,11 @@ public static class App
         AnsiConsole.Write(new Rule("[green]maimai 自制谱一键上机工具[/]").RuleStyle("grey"));
         AnsiConsole.WriteLine();
 
-        // Step 1: Choose input type
         var inputType = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]谱面文件是？[/]")
                 .AddChoices(["文件夹", "压缩包 (.zip)"]));
 
-        // Step 2: File picker
         string projectDir;
         if (inputType.Contains("zip"))
             projectDir = await PickZipAsync();
@@ -36,60 +52,55 @@ public static class App
             return;
         }
 
-        // Step 3: Find maidata.txt
         var maidataPath = Path.Combine(projectDir, "maidata.txt");
         if (!File.Exists(maidataPath))
         {
             AnsiConsole.MarkupLine($"[red]找不到 maidata.txt: {E(projectDir)}[/]");
-            AnsiConsole.MarkupLine("[grey]按任意键退出...[/]");
-            Console.ReadKey(true);
+            PauseAndExit();
             return;
         }
 
-        // Step 4: Parse and show summary
         SimaiProject project;
         try { project = MaidataParser.Parse(maidataPath); }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]解析失败: {E(ex.Message)}[/]");
-            Console.ReadKey(true);
+            PauseAndExit();
             return;
         }
 
         ShowSummary(project);
 
-        // Step 5: Get 6-digit ID
         var id6 = AnsiConsole.Ask<int>(
-            "[bold]请输入 6 位数 ID[/] ([grey]DX=1xxxx, 标准=0xxxx[/]):");
+            "[bold]请输入 6 位数 ID[/] ([grey]DX=01xxxx, 标准=00xxxx[/]):");
 
-        if (id6 < 10000 || id6 > 199999)
+        if (id6 < 0 || id6 > 199999 || (id6 >= 100000 && id6 < 10000))
         {
-            AnsiConsole.MarkupLine("[red]ID 格式错误，必须是 6 位数。[/]");
-            Console.ReadKey(true);
+            AnsiConsole.MarkupLine("[red]ID 格式错误，6 位数，DX=01xxxx 标准=00xxxx[/]");
+            PauseAndExit();
             return;
         }
 
         var isDx = (id6 / 10000) % 10 == 1;
         AnsiConsole.MarkupLine(isDx
-            ? $"[blue]DX 谱面: {id6:D6}[/]"
-            : $"[blue]标准谱面: {id6:D6}[/]");
+            ? $"[blue]DX: {id6:D6}[/]"
+            : $"[blue]标准: {id6:D6}[/]");
 
-        // Step 6: Confirm
         if (!AnsiConsole.Confirm("[bold]确认开始转换?[/]"))
         {
             AnsiConsole.MarkupLine("[grey]已取消。[/]");
             return;
         }
 
-        // Step 7: Run pipeline
         AnsiConsole.WriteLine();
         var toolsDir = FindToolsDir();
         var outputBase = Path.Combine(AppContext.BaseDirectory, "output");
         var pipeline = new Pipeline(toolsDir, outputBase);
 
         if (!AudioConverter.IsAvailable(toolsDir))
-            AnsiConsole.MarkupLine("[yellow]未检测到 ACE.exe，音频转换将跳过[/]");
+            AnsiConsole.MarkupLine("[yellow]未检测到 ACE.exe，音频将跳过[/]");
 
+        string? resultPath = null;
         await AnsiConsole.Progress()
             .AutoClear(false)
             .Columns(new TaskDescriptionColumn(), new SpinnerColumn())
@@ -98,16 +109,11 @@ public static class App
                 var task = ctx.AddTask("[green]转换中...[/]");
                 try
                 {
-                    var result = await pipeline.RunAsync(projectDir, id6, DefaultOpt, msg =>
+                    resultPath = await pipeline.RunAsync(projectDir, id6, DefaultOpt, msg =>
                         task.Description = $"[grey]{E(msg)}[/]");
 
                     task.Description = "[green]完成![/]";
                     task.StopTask();
-
-                    AnsiConsole.WriteLine();
-                    AnsiConsole.MarkupLine($"[bold green]输出目录:[/] {E(result)}");
-                    AnsiConsole.MarkupLine($"[bold]谱面数:[/] {project.Charts.Count(c => c.Value.IsValid)}");
-                    AnsiConsole.MarkupLine("[grey](音频需手动用 ACE 替换 ACB 文件)[/]");
                 }
                 catch (Exception ex)
                 {
@@ -117,8 +123,44 @@ public static class App
             });
 
         AnsiConsole.WriteLine();
+
+        if (resultPath != null && Directory.Exists(resultPath))
+        {
+            AnsiConsole.MarkupLine($"[bold green]输出:[/] {E(resultPath)}");
+            CopyToClipboard(resultPath);
+            AnsiConsole.MarkupLine("[grey]路径已复制到剪贴板[/]");
+        }
+
+        PauseAndExit();
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        try
+        {
+            if (OpenClipboard(IntPtr.Zero))
+            {
+                EmptyClipboard();
+                var hMem = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)((text.Length + 1) * 2));
+                if (hMem != IntPtr.Zero)
+                {
+                    var ptr = GlobalLock(hMem);
+                    Marshal.Copy(text.ToCharArray(), 0, ptr, text.Length);
+                    Marshal.WriteInt16(ptr, text.Length * 2, 0);
+                    GlobalUnlock(hMem);
+                    SetClipboardData(CF_UNICODETEXT, hMem);
+                }
+                CloseClipboard();
+            }
+        }
+        catch { }
+    }
+
+    private static void PauseAndExit()
+    {
         AnsiConsole.MarkupLine("[grey]按任意键退出...[/]");
         Console.ReadKey(true);
+        Environment.Exit(0);
     }
 
     private static string E(string s) => Markup.Escape(s);
@@ -169,9 +211,7 @@ public static class App
             {
                 FileName = "powershell",
                 Arguments = "-NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select folder with maidata.txt'; if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath }\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
+                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
             };
             using var proc = Process.Start(psi);
             var output = proc?.StandardOutput.ReadToEnd().Trim();
@@ -179,7 +219,6 @@ public static class App
             if (!string.IsNullOrEmpty(output)) return output;
         }
         catch { }
-
         return AnsiConsole.Ask<string>("[bold]请输入谱面文件夹路径:[/]");
     }
 
@@ -192,9 +231,7 @@ public static class App
             {
                 FileName = "powershell",
                 Arguments = "-NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'ZIP files (*.zip)|*.zip'; $f.Title = 'Select chart ZIP'; if ($f.ShowDialog() -eq 'OK') { $f.FileName }\"",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
+                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
             };
             using var proc = Process.Start(psi);
             var output = proc?.StandardOutput.ReadToEnd().Trim();
@@ -204,7 +241,6 @@ public static class App
             var tempDir = Path.Combine(Path.GetTempPath(), $"simai_{Guid.NewGuid():N}");
             Directory.CreateDirectory(tempDir);
             System.IO.Compression.ZipFile.ExtractToDirectory(output, tempDir);
-
             var maidata = Directory.GetFiles(tempDir, "maidata.txt", SearchOption.AllDirectories).FirstOrDefault();
             return maidata != null ? Path.GetDirectoryName(maidata)! : tempDir;
         }
