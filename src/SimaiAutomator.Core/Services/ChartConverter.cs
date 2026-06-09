@@ -5,7 +5,7 @@ namespace SimaiAutomator.Core.Services;
 
 public static class ChartConverter
 {
-    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ProcessTimeout = TimeSpan.FromSeconds(60);
 
     public static async Task<string> ConvertAsync(
         string maidataPath, ChartDifficulty diff, int simaiDifficulty,

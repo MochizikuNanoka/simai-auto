@@ -7,13 +7,25 @@ public enum ChartDifficulty
 
 public static class ChartDifficultyEx
 {
+    /// <summary>Simple label for display: just the difficulty abbreviation</summary>
     public static string Label(this ChartDifficulty d) => d switch
     {
-        ChartDifficulty.Basic => "绿 Basic",
-        ChartDifficulty.Advanced => "黄 Advanced",
-        ChartDifficulty.Expert => "红 Expert",
-        ChartDifficulty.Master => "紫 Master",
-        ChartDifficulty.ReMaster => "白 Re:Master",
+        ChartDifficulty.Basic => "BSC",
+        ChartDifficulty.Advanced => "ADV",
+        ChartDifficulty.Expert => "EXP",
+        ChartDifficulty.Master => "MST",
+        ChartDifficulty.ReMaster => "ReM",
+        _ => "-"
+    };
+
+    /// <summary>Full Chinese label</summary>
+    public static string FullLabel(this ChartDifficulty d) => d switch
+    {
+        ChartDifficulty.Basic => "Basic(绿)",
+        ChartDifficulty.Advanced => "Advanced(黄)",
+        ChartDifficulty.Expert => "Expert(红)",
+        ChartDifficulty.Master => "Master(紫)",
+        ChartDifficulty.ReMaster => "Re:Master(白)",
         _ => "-"
     };
 
