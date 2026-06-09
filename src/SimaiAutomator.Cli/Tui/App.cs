@@ -169,8 +169,9 @@ public static class App
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell",
-                Arguments = "-NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select folder with maidata.txt'; if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath }\"",
-                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
+                Arguments = "-NoProfile -Command \"[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.FolderBrowserDialog; $f.Description = 'Select folder with maidata.txt'; if ($f.ShowDialog() -eq 'OK') { $f.SelectedPath }\"",
+                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8
             };
             using var proc = Process.Start(psi);
             var output = proc?.StandardOutput.ReadToEnd().Trim();
@@ -189,8 +190,9 @@ public static class App
             var psi = new ProcessStartInfo
             {
                 FileName = "powershell",
-                Arguments = "-NoProfile -Command \"Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'ZIP files (*.zip)|*.zip'; $f.Title = 'Select chart ZIP'; if ($f.ShowDialog() -eq 'OK') { $f.FileName }\"",
-                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true
+                Arguments = "-NoProfile -Command \"[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'ZIP files (*.zip)|*.zip'; $f.Title = 'Select chart ZIP'; if ($f.ShowDialog() -eq 'OK') { $f.FileName }\"",
+                RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true,
+                StandardOutputEncoding = Encoding.UTF8
             };
             using var proc = Process.Start(psi);
             var output = proc?.StandardOutput.ReadToEnd().Trim();
